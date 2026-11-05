@@ -27,3 +27,32 @@ From `frontend`, run `npm run build` and `npm run lint`. From `backend`, run `./
 - The administrator is configured from environment variables. Customer authentication and durable role management still need implementation before production.
 
 Frontend API configuration uses `VITE_API_URL`. Backend CORS uses comma-separated `CORS_ALLOWED_ORIGINS`. Render can run the backend with `./gradlew bootRun`; configure `DATABASE_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`, and admin credentials in its environment. Vercel should set `VITE_API_URL` to the deployed API base URL.
+
+## Deploying the frontend and API
+
+The repository includes a root `Dockerfile` for the Java API. Render's Docker build uses the repository root as its context; the frontend remains an independent Vite project under `frontend`.
+
+### Render
+
+1. Create a Render PostgreSQL database. Choose Frankfurt to keep it near the API. For a real shop, choose a paid database plan: Render's Free Postgres is limited to 1 GB, has no backups, and expires after 30 days.
+2. In Render, create a Web Service and connect `Domsabianca16/magazin-online`. Select Docker, Dockerfile path `./Dockerfile`, and Docker context `.`. Set health check path to `/api/health`.
+3. In the database's Connect page, copy the **internal** host, port, database name, username, and password. In the API service's Environment page, set:
+   - `DATABASE_URL=jdbc:postgresql://<internal-host>:<port>/<database-name>`
+   - `DB_USERNAME=<database-username>`
+   - `DB_PASSWORD=<database-password>`
+   - `PORT=10000`
+   - `DDL_AUTO=update`
+   - `SHOW_SQL=false`
+   - `ADMIN_USERNAME=<new-admin-name>`
+   - `ADMIN_PASSWORD=<long-unique-password>`
+   - `CORS_ALLOWED_ORIGINS=http://localhost:5173` initially; replace this with the Vercel production URL after the frontend deploys.
+4. Deploy and check `https://<render-service>.onrender.com/api/health`. The API uses the JDBC URL form for `DATABASE_URL`; do not paste the raw `postgresql://...` URL into that variable.
+
+### Vercel
+
+1. Import the same GitHub repository as a new Vercel project.
+2. Set Root Directory to `frontend`. Leave the Vite framework preset, build command `npm run build`, and output directory `dist` (Vercel detects these automatically).
+3. Add `VITE_API_URL=https://<render-service>.onrender.com/api` for Production, then deploy.
+4. Copy the deployed Vercel production URL into Render's `CORS_ALLOWED_ORIGINS`, save, and redeploy the API. The browser can then call the API across domains.
+
+The app currently has no administration UI; the administrator account protects `POST /api/products` via HTTP Basic. The `dev` profile alone seeds demo products, so a fresh production database needs products added through the API. Hibernate `DDL_AUTO=update` is still in use; configure versioned migrations before relying on this deployment for production orders. Vercel Preview URLs are not automatically allowed by the API's exact-origin CORS list; add any preview origin you intend to use.
