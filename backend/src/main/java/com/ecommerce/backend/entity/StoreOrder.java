@@ -20,6 +20,9 @@ public class StoreOrder {
     @Column(nullable = false, length = 20) private String postalCode;
     @Column(nullable = false, length = 40) private String paymentMethod = "CASH_ON_DELIVERY";
     @Column(nullable = false, length = 30) private String status = "PENDING";
+    @Column(length = 30) private String paymentStatus = "UNPAID";
+    private Instant refundedAt;
+    @Column(length = 500) private String refundNote;
     @Column(nullable = false) private long subtotalCents;
     @Column(nullable = false) private long shippingCents;
     @Column(nullable = false) private long totalCents;
@@ -44,6 +47,13 @@ public class StoreOrder {
     public void setPostalCode(String v) { postalCode = v; }
     public String getPaymentMethod() { return paymentMethod; }
     public String getStatus() { return status; }
+    public void setStatus(String v) { status = v; }
+    public String getPaymentStatus() { return paymentStatus == null ? "UNPAID" : paymentStatus; }
+    public void setPaymentStatus(String v) { paymentStatus = v; }
+    public Instant getRefundedAt() { return refundedAt; }
+    public void setRefundedAt(Instant v) { refundedAt = v; }
+    public String getRefundNote() { return refundNote; }
+    public void setRefundNote(String v) { refundNote = v; }
     public long getSubtotalCents() { return subtotalCents; }
     public void setSubtotalCents(long v) { subtotalCents = v; }
     public long getShippingCents() { return shippingCents; }
