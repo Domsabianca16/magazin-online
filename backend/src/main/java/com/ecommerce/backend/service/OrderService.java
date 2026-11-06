@@ -1,6 +1,7 @@
 package com.ecommerce.backend.service;
 
 import com.ecommerce.backend.entity.Product;
+import com.ecommerce.backend.entity.ProductVariant;
 import com.ecommerce.backend.entity.StoreOrder;
 import com.ecommerce.backend.entity.StoreOrderItem;
 import com.ecommerce.backend.repository.ProductRepository;
@@ -25,10 +26,12 @@ public class OrderService {
         this.products = products; this.orders = orders;
     }
 
-    public record ItemRequest(Long productId, Integer quantity) {}
+    public record ItemRequest(Long productId, Integer quantity, String variantName) {
+        public ItemRequest(Long productId, Integer quantity) { this(productId, quantity, null); }
+    }
     public record CreateOrderRequest(String name, String email, String phone, String address,
                                      String city, String postal, String paymentMethod, java.util.List<ItemRequest> items) {}
-    public record ItemResult(Long productId, String name, int quantity, long unitPriceCents) {}
+    public record ItemResult(Long productId, String name, String variantName, String variantColor, int quantity, long unitPriceCents) {}
     public record OrderResult(Long id, String status, String paymentMethod, long subtotalCents,
                               long shippingCents, long totalCents, java.time.Instant createdAt,
                               java.util.List<ItemResult> items) {}
@@ -56,17 +59,30 @@ public class OrderService {
         order.setAddress(clean(request.address(), 240));
         order.setCity(clean(request.city(), 100));
         order.setPostalCode(clean(request.postal(), 20));
-        long subtotal = 0;
+        Map<Long, Product> lockedProducts = new TreeMap<>();
         for (var line : quantities.entrySet()) {
             if (line.getValue() > 99) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum quantity per product is 99");
             Product product = products.findByIdForUpdate(line.getKey())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "A product in the bag is no longer available"));
             if (product.getPrice() == null || product.getPrice() < 0 || product.getStock() == null || product.getStock() < line.getValue())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient stock for " + product.getName());
-            long unitCents = BigDecimal.valueOf(product.getPrice()).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact();
-            subtotal = Math.addExact(subtotal, Math.multiplyExact(unitCents, line.getValue()));
             product.setStock(product.getStock() - line.getValue());
-            order.getItems().add(new StoreOrderItem(order, product.getId(), product.getName(), unitCents, line.getValue()));
+            lockedProducts.put(product.getId(), product);
+        }
+        long subtotal = 0;
+        for (ItemRequest line : request.items()) {
+            Product product = lockedProducts.get(line.productId());
+            ProductVariant variant = null;
+            if (line.variantName() != null && !line.variantName().isBlank()) {
+                variant = product.getVariants().stream().filter(v -> v.getName().equalsIgnoreCase(line.variantName().trim())).findFirst()
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "A selected product variant is no longer available"));
+            } else if (!product.getVariants().isEmpty()) {
+                variant = product.getVariants().get(0);
+            }
+            long unitCents = BigDecimal.valueOf(product.getPrice()).movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact();
+            subtotal = Math.addExact(subtotal, Math.multiplyExact(unitCents, line.quantity()));
+            order.getItems().add(new StoreOrderItem(order, product.getId(), product.getName(), unitCents, line.quantity(),
+                    variant == null ? null : variant.getName(), variant == null ? null : variant.getColorHex()));
         }
         long shipping = subtotal == 0 || subtotal >= 30_000 ? 0 : 1_900;
         order.setSubtotalCents(subtotal);
@@ -92,6 +108,6 @@ public class OrderService {
     private static OrderResult result(StoreOrder order) {
         return new OrderResult(order.getId(), order.getStatus(), order.getPaymentMethod(), order.getSubtotalCents(),
                 order.getShippingCents(), order.getTotalCents(), order.getCreatedAt(),
-                order.getItems().stream().map(i -> new ItemResult(i.getProductId(), i.getProductName(), i.getQuantity(), i.getUnitPriceCents())).toList());
+                order.getItems().stream().map(i -> new ItemResult(i.getProductId(), i.getProductName(), i.getVariantName(), i.getVariantColor(), i.getQuantity(), i.getUnitPriceCents())).toList());
     }
 }

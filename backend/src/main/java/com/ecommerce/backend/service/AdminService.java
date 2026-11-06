@@ -19,7 +19,7 @@ public class AdminService {
     private final StoreOrderRepository orders;
     public AdminService(ProductRepository products, StoreOrderRepository orders) { this.products=products; this.orders=orders; }
 
-    public record ItemView(Long productId, String name, int quantity, long unitPriceCents) {}
+    public record ItemView(Long productId, String name, String variantName, String variantColor, int quantity, long unitPriceCents) {}
     public record OrderView(Long id, String status, String paymentStatus, String paymentMethod, String customerName, String email, String phone, String address, String city, String postalCode, long subtotalCents, long shippingCents, long totalCents, Instant createdAt, Instant refundedAt, String refundNote, List<ItemView> items) {}
     public record CustomerView(String name, String email, String phone, long orderCount, long orderValueCents, Instant lastOrderAt) {}
     private static class CustomerAggregate { String name; String email; String phone; long count; long value; Instant last; }
@@ -56,5 +56,5 @@ public class AdminService {
         return view(orders.save(order));
     }
     private StoreOrder order(Long id){return orders.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Order not found"));}
-    private OrderView view(StoreOrder o){return new OrderView(o.getId(),o.getStatus(),o.getPaymentStatus(),o.getPaymentMethod(),o.getCustomerName(),o.getEmail(),o.getPhone(),o.getAddress(),o.getCity(),o.getPostalCode(),o.getSubtotalCents(),o.getShippingCents(),o.getTotalCents(),o.getCreatedAt(),o.getRefundedAt(),o.getRefundNote(),o.getItems().stream().map(i->new ItemView(i.getProductId(),i.getProductName(),i.getQuantity(),i.getUnitPriceCents())).toList());}
+    private OrderView view(StoreOrder o){return new OrderView(o.getId(),o.getStatus(),o.getPaymentStatus(),o.getPaymentMethod(),o.getCustomerName(),o.getEmail(),o.getPhone(),o.getAddress(),o.getCity(),o.getPostalCode(),o.getSubtotalCents(),o.getShippingCents(),o.getTotalCents(),o.getCreatedAt(),o.getRefundedAt(),o.getRefundNote(),o.getItems().stream().map(i->new ItemView(i.getProductId(),i.getProductName(),i.getVariantName(),i.getVariantColor(),i.getQuantity(),i.getUnitPriceCents())).toList());}
 }
