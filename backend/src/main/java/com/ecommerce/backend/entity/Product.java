@@ -12,7 +12,7 @@ public class Product {
     @Column(length = 2000) private String description;
     private Double price;
     private Integer stock;
-    @Column(length = 1000) private String imageUrl;
+    @Column(columnDefinition = "TEXT") private String imageUrl;
     @Column(length = 80, unique = true) private String sku;
     @Column(length = 100) private String category;
     @Column(length = 120) private String brand;

@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
+import java.net.URI;
 
 @Service
 public class ProductService {
@@ -25,5 +26,6 @@ public class ProductService {
         if(p.getStock()==null || p.getStock()<0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Stock must be zero or higher");
         if(p.getName().trim().length()>160) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Product name is too long");
         p.setName(p.getName().trim()); if(p.getSku()!=null && p.getSku().isBlank()) p.setSku(null);
+        if(p.getImageUrl()!=null){String image=p.getImageUrl().trim();if(image.isEmpty())p.setImageUrl(null);else{if(image.length()>2048)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Image URL must be 2048 characters or fewer");try{URI uri=URI.create(image);if(uri.getHost()==null||!("http".equalsIgnoreCase(uri.getScheme())||"https".equalsIgnoreCase(uri.getScheme())))throw new IllegalArgumentException();p.setImageUrl(uri.toASCIIString());}catch(IllegalArgumentException ex){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Image URL must be a valid http or https link");}}}
     }
 }
