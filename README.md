@@ -1,6 +1,6 @@
-# FestIQ
+# Festiq
 
-FestIQ is a Vite + React shop for event decorations and party supplies, with a request-a-quote form for event organization services. It is backed by a Spring Boot API and PostgreSQL. Orders can be placed with cash on delivery; card payments are not configured. Customer accounts, persisted customer carts, order history, payment integration, and several other commerce APIs are not implemented yet.
+Festiq is a Vite + React shop for event decorations and party supplies, with a request-a-quote form for event organization services. It is backed by a Spring Boot API and PostgreSQL. Orders can be placed with cash on delivery; card payments are not configured. Customer accounts, persisted customer carts, order history, payment integration, and several other commerce APIs are not implemented yet.
 
 ## Local development
 
