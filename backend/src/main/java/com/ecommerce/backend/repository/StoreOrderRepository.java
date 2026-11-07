@@ -6,4 +6,5 @@ import java.util.Optional;
 
 public interface StoreOrderRepository extends JpaRepository<StoreOrder, Long> {
     Optional<StoreOrder> findByIdempotencyKey(String idempotencyKey);
+    Optional<StoreOrder> findByStripeSessionId(String stripeSessionId);
 }

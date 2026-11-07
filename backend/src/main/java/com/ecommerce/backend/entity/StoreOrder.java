@@ -21,6 +21,8 @@ public class StoreOrder {
     @Column(nullable = false, length = 40) private String paymentMethod = "CASH_ON_DELIVERY";
     @Column(nullable = false, length = 30) private String status = "PENDING";
     @Column(length = 30) private String paymentStatus = "UNPAID";
+    @Column(length = 255, unique = true) private String stripeSessionId;
+    @Column(length = 2048) private String stripeCheckoutUrl;
     private Instant refundedAt;
     @Column(length = 500) private String refundNote;
     @Column(nullable = false) private long subtotalCents;
@@ -46,6 +48,11 @@ public class StoreOrder {
     public String getPostalCode() { return postalCode; }
     public void setPostalCode(String v) { postalCode = v; }
     public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String v) { paymentMethod = v; }
+    public String getStripeSessionId() { return stripeSessionId; }
+    public void setStripeSessionId(String v) { stripeSessionId = v; }
+    public String getStripeCheckoutUrl() { return stripeCheckoutUrl; }
+    public void setStripeCheckoutUrl(String v) { stripeCheckoutUrl = v; }
     public String getStatus() { return status; }
     public void setStatus(String v) { status = v; }
     public String getPaymentStatus() { return paymentStatus == null ? "UNPAID" : paymentStatus; }

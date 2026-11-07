@@ -38,7 +38,7 @@ public class AdminService {
     @Transactional public OrderView updateOrderStatus(Long id,String rawStatus) {
         if(rawStatus==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Status is required");
         String status=rawStatus.trim().toUpperCase(Locale.ROOT);
-        if(!Set.of("PENDING","PROCESSING","SHIPPED","DELIVERED","CANCELLED").contains(status)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported order status");
+        if(!Set.of("PAYMENT_PENDING","PENDING","PROCESSING","SHIPPED","DELIVERED","CANCELLED").contains(status)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported order status");
         StoreOrder order=order(id); order.setStatus(status); return view(orders.save(order));
     }
     @Transactional public OrderView markPaid(Long id) {

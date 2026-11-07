@@ -1,6 +1,6 @@
 # Festiq
 
-Festiq is a Vite + React shop for event decorations and party supplies, with a request-a-quote form for event organization services. It is backed by a Spring Boot API and PostgreSQL. Orders can be placed with cash on delivery; card payments are not configured. Customer accounts, persisted customer carts, order history, payment integration, and several other commerce APIs are not implemented yet.
+Festiq is a Vite + React shop for event decorations and party supplies, with a request-a-quote form for event organization services. It is backed by a Spring Boot API and PostgreSQL. Orders can be paid on delivery or by card through Stripe Checkout. Customer accounts, persisted customer carts, order history, and several other commerce APIs are not implemented yet.
 
 ## Local development
 
@@ -22,8 +22,8 @@ From `frontend`, run `npm run build` and `npm run lint`. From `backend`, run `./
 - `GET /api/products` returns the persisted product catalogue.
 - `POST /api/products` requires HTTP Basic authentication as the configured administrator.
 - Products are seeded in development only when the database is empty.
-- `POST /api/orders` places a guest order using cash on delivery. It checks and locks inventory inside a database transaction, stores a price snapshot and delivery details, reduces stock, calculates shipping on the server, and uses the `Idempotency-Key` header to protect against duplicate submissions. The response status is `PENDING`; no card payment is claimed or processed. Restart the backend after pulling these changes so the new endpoint and order tables are loaded.
-- Customer accounts, reset password, managed order history, category, review, coupon, and payment provider endpoints do not exist yet. Card payment is not offered.
+- `POST /api/orders` places a guest order using cash on delivery. `POST /api/payments/stripe/checkout` creates a card checkout session; prices and shipping are calculated from the server catalogue. The Stripe webhook at `/api/payments/stripe/webhook` confirms payment and the session status is available at `/api/payments/stripe/session/{sessionId}`.
+- Customer accounts, reset password, managed order history, category, review, and coupon endpoints do not exist yet.
 - The administrator is configured from environment variables. Customer authentication and durable role management still need implementation before production.
 
 Frontend API configuration uses `VITE_API_URL`. Backend CORS uses comma-separated `CORS_ALLOWED_ORIGINS`. Render can run the backend with `./gradlew bootRun`; configure `DATABASE_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`, and admin credentials in its environment. Vercel should set `VITE_API_URL` to the deployed API base URL.
@@ -54,5 +54,6 @@ The repository includes a root `Dockerfile` for the Java API. Render's Docker bu
 2. Set Root Directory to `frontend`. Leave the Vite framework preset, build command `npm run build`, and output directory `dist` (Vercel detects these automatically).
 3. Add `VITE_API_URL=https://<render-service>.onrender.com/api` for Production, then deploy.
 4. Copy the deployed Vercel production URL into Render's `CORS_ALLOWED_ORIGINS`, save, and redeploy the API. The browser can then call the API across domains.
+5. For card payments, set `STRIPE_SECRET_KEY` and `FRONTEND_URL` (the Vercel production origin) in Render's environment and redeploy. In Stripe's Dashboard, configure a webhook endpoint at `https://<render-service>.onrender.com/api/payments/stripe/webhook` for `checkout.session.completed` and `checkout.session.expired`. Set the endpoint signing secret as `STRIPE_WEBHOOK_SECRET` in Render and redeploy. Start with Stripe test keys and test the webhook before using live keys.
 
 The administration page is available directly at `/admin` and is intentionally not linked from the public storefront. A fresh production database needs products added from that page. Hibernate `DDL_AUTO=update` is still in use; configure versioned migrations before relying on this deployment for production orders. Vercel Preview URLs are not automatically allowed by the API's exact-origin CORS list; add any preview origin you intend to use.

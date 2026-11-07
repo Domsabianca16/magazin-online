@@ -38,11 +38,20 @@ public class OrderService {
 
     @Transactional
     public OrderResult create(String idempotencyKey, CreateOrderRequest request) {
+        return create(idempotencyKey, request, false);
+    }
+
+    @Transactional
+    public OrderResult createStripeOrder(String idempotencyKey, CreateOrderRequest request) {
+        return create(idempotencyKey, request, true);
+    }
+
+    private OrderResult create(String idempotencyKey, CreateOrderRequest request, boolean stripe) {
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 80)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid Idempotency-Key header is required");
         var prior = orders.findByIdempotencyKey(idempotencyKey);
         if (prior.isPresent()) return result(prior.get());
-        validate(request);
+        validate(request, stripe);
 
         Map<Long, Integer> quantities = new TreeMap<>();
         for (ItemRequest item : request.items()) {
@@ -59,6 +68,8 @@ public class OrderService {
         order.setAddress(clean(request.address(), 240));
         order.setCity(clean(request.city(), 100));
         order.setPostalCode(clean(request.postal(), 20));
+        order.setPaymentMethod(stripe ? "STRIPE" : "CASH_ON_DELIVERY");
+        if (stripe) { order.setPaymentStatus("PENDING"); order.setStatus("PAYMENT_PENDING"); }
         Map<Long, Product> lockedProducts = new TreeMap<>();
         for (var line : quantities.entrySet()) {
             if (line.getValue() > 99) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum quantity per product is 99");
@@ -88,16 +99,50 @@ public class OrderService {
         order.setSubtotalCents(subtotal);
         order.setShippingCents(shipping);
         order.setTotalCents(Math.addExact(subtotal, shipping));
+        if (stripe && order.getTotalCents() < 200)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Plata cu cardul este disponibilă pentru comenzi de cel puțin 2 lei");
         return result(orders.saveAndFlush(order));
     }
 
-    private static void validate(CreateOrderRequest r) {
+    @Transactional
+    public void markStripePaid(String sessionId) {
+        StoreOrder order = orders.findByStripeSessionId(sessionId).orElseThrow(() -> new IllegalArgumentException("Unknown Stripe session"));
+        if ("STRIPE".equals(order.getPaymentMethod()) && "PENDING".equals(order.getPaymentStatus())) {
+            order.setPaymentStatus("PAID"); order.setStatus("PENDING"); orders.save(order);
+        }
+    }
+
+    @Transactional
+    public void markStripeExpired(String sessionId) {
+        StoreOrder order = orders.findByStripeSessionId(sessionId).orElseThrow(() -> new IllegalArgumentException("Unknown Stripe session"));
+        if (!"STRIPE".equals(order.getPaymentMethod()) || !"PENDING".equals(order.getPaymentStatus())) return;
+        for (StoreOrderItem item : order.getItems()) {
+            products.findByIdForUpdate(item.getProductId()).ifPresent(product -> product.setStock((product.getStock() == null ? 0 : product.getStock()) + item.getQuantity()));
+        }
+        order.setPaymentStatus("FAILED"); order.setStatus("CANCELLED"); orders.save(order);
+    }
+
+    @Transactional
+    public OrderResult saveStripeSession(Long orderId, String sessionId, String url) {
+        StoreOrder order = orders.findById(orderId).orElseThrow();
+        if (order.getStripeSessionId() == null) { order.setStripeSessionId(sessionId); order.setStripeCheckoutUrl(url); }
+        return result(orders.save(order));
+    }
+
+    @Transactional
+    public PaymentStatus paymentStatus(String sessionId) {
+        StoreOrder order = orders.findByStripeSessionId(sessionId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment session not found"));
+        return new PaymentStatus(order.getId(), order.getPaymentStatus(), order.getTotalCents());
+    }
+    public record PaymentStatus(Long orderId, String paymentStatus, long totalCents) {}
+
+    private static void validate(CreateOrderRequest r, boolean stripe) {
         if (r == null || blank(r.name()) || blank(r.email()) || !EMAIL.matcher(r.email().trim()).matches()
                 || blank(r.phone()) || blank(r.address()) || blank(r.city()) || blank(r.postal())
                 || r.items() == null || r.items().isEmpty() || r.items().size() > 50)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Complete all delivery details and add at least one product");
-        if (r.paymentMethod() != null && !r.paymentMethod().equals("CASH_ON_DELIVERY"))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only cash on delivery is currently available");
+        if (!stripe && r.paymentMethod() != null && !r.paymentMethod().equals("CASH_ON_DELIVERY"))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment method");
     }
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static String clean(String value, int max) {
