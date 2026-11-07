@@ -41,7 +41,15 @@ public class ProductService {
         if(p.getImageUrl()!=null&&!p.getImageUrl().isBlank())p.setImageUrl(normalizeImageUrl(p.getImageUrl()));else p.setImageUrl(null);
     }
     private static String normalizeImageUrl(String value) {
-        String image=value.trim(); if(image.length()>2048)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Image URL must be 2048 characters or fewer");
+        String image=value.trim();
+        if(image.startsWith("data:")) {
+            java.util.regex.Matcher dataImage=java.util.regex.Pattern.compile("^data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$").matcher(image);
+            if(!dataImage.matches())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Local image must be a base64 JPEG, PNG, or WebP image");
+            String encoded=dataImage.group(2); long decodedBytes=(encoded.length()*3L/4)-(encoded.endsWith("==")?2:encoded.endsWith("=")?1:0);
+            if(decodedBytes>700_000)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Local product images must be optimized to 700 KB or less");
+            return image;
+        }
+        if(image.length()>2048)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Image URL must be 2048 characters or fewer");
         try { URI uri=URI.create(image); if(uri.getHost()==null||!("http".equalsIgnoreCase(uri.getScheme())||"https".equalsIgnoreCase(uri.getScheme())))throw new IllegalArgumentException(); return uri.toASCIIString(); }
         catch(IllegalArgumentException ex){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Image URL must be a valid http or https link");}
     }

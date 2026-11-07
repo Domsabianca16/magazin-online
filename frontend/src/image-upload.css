@@ -1,0 +1,1 @@
+.admin-image-field{display:flex;flex-direction:column;gap:10px;min-width:0}.admin-image-field input[type=file]{padding:9px;background:#fff;font-size:10px}.admin-image-preview{width:100%;max-height:190px;object-fit:contain;object-position:left center;background:#ecece6;border:1px solid #dedfd7;padding:5px}.admin-variant-editor .admin-image-preview{max-height:150px}

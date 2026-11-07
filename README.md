@@ -25,6 +25,7 @@ From `frontend`, run `npm run build` and `npm run lint`. From `backend`, run `./
 - `POST /api/orders` places a guest order using cash on delivery. `POST /api/payments/stripe/checkout` creates a card checkout session; prices and shipping are calculated from the server catalogue. The Stripe webhook at `/api/payments/stripe/webhook` confirms payment and the session status is available at `/api/payments/stripe/session/{sessionId}`.
 - Customer accounts, reset password, managed order history, category, review, and coupon endpoints do not exist yet.
 - The administrator is configured from environment variables. Customer authentication and durable role management still need implementation before production.
+- Admin product forms accept photos selected from the computer (JPG, PNG, or WebP). The browser resizes them to WebP, stores the resulting image data with the product in PostgreSQL, and limits each image to 700 KB so it remains available on the deployed storefront.
 
 Frontend API configuration uses `VITE_API_URL`. Backend CORS uses comma-separated `CORS_ALLOWED_ORIGINS`. Render can run the backend with `./gradlew bootRun`; configure `DATABASE_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`, and admin credentials in its environment. Vercel should set `VITE_API_URL` to the deployed API base URL.
 
