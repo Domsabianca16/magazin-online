@@ -50,7 +50,12 @@ public class OrderService {
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 80)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid Idempotency-Key header is required");
         var prior = orders.findByIdempotencyKey(idempotencyKey);
-        if (prior.isPresent()) return result(prior.get());
+        if (prior.isPresent()) {
+            StoreOrder previous = prior.get();
+            if (stripe && "STRIPE".equals(previous.getPaymentMethod()) && "FAILED".equals(previous.getPaymentStatus()))
+                return reopenStripeOrder(previous);
+            return result(previous);
+        }
         validate(request, stripe);
 
         Map<Long, Integer> quantities = new TreeMap<>();
@@ -104,9 +109,25 @@ public class OrderService {
         return result(orders.saveAndFlush(order));
     }
 
+    private OrderResult reopenStripeOrder(StoreOrder order) {
+        Map<Long, Integer> quantities = new TreeMap<>();
+        for (StoreOrderItem item : order.getItems()) quantities.merge(item.getProductId(), item.getQuantity(), Integer::sum);
+        for (var line : quantities.entrySet()) {
+            Product product = products.findByIdForUpdate(line.getKey())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "A product in the bag is no longer available"));
+            if (product.getStock() == null || product.getStock() < line.getValue())
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Insufficient stock for " + product.getName());
+            product.setStock(product.getStock() - line.getValue());
+        }
+        order.setPaymentStatus("PENDING"); order.setStatus("PAYMENT_PENDING");
+        order.setStripeSessionId(null); order.setStripeCheckoutUrl(null);
+        return result(orders.saveAndFlush(order));
+    }
+
     @Transactional
     public void markStripePaid(String sessionId) {
-        StoreOrder order = orders.findByStripeSessionId(sessionId).orElseThrow(() -> new IllegalArgumentException("Unknown Stripe session"));
+        StoreOrder order = orders.findByStripeSessionId(sessionId).orElse(null);
+        if (order == null) return;
         if ("STRIPE".equals(order.getPaymentMethod()) && "PENDING".equals(order.getPaymentStatus())) {
             order.setPaymentStatus("PAID"); order.setStatus("PENDING"); orders.save(order);
         }
@@ -114,7 +135,8 @@ public class OrderService {
 
     @Transactional
     public void markStripeExpired(String sessionId) {
-        StoreOrder order = orders.findByStripeSessionId(sessionId).orElseThrow(() -> new IllegalArgumentException("Unknown Stripe session"));
+        StoreOrder order = orders.findByStripeSessionId(sessionId).orElse(null);
+        if (order == null) return;
         if (!"STRIPE".equals(order.getPaymentMethod()) || !"PENDING".equals(order.getPaymentStatus())) return;
         for (StoreOrderItem item : order.getItems()) {
             products.findByIdForUpdate(item.getProductId()).ifPresent(product -> product.setStock((product.getStock() == null ? 0 : product.getStock()) + item.getQuantity()));
@@ -125,7 +147,7 @@ public class OrderService {
     @Transactional
     public OrderResult saveStripeSession(Long orderId, String sessionId, String url) {
         StoreOrder order = orders.findById(orderId).orElseThrow();
-        if (order.getStripeSessionId() == null) { order.setStripeSessionId(sessionId); order.setStripeCheckoutUrl(url); }
+        order.setStripeSessionId(sessionId); order.setStripeCheckoutUrl(url);
         return result(orders.save(order));
     }
 

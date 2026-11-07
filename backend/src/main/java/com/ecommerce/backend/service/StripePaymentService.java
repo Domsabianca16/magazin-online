@@ -31,9 +31,19 @@ public class StripePaymentService {
         requireSecret();
         OrderService.OrderResult order = orders.createStripeOrder(idempotencyKey, request);
         StoreOrder persisted = orderRepository.findById(order.id()).orElseThrow();
-        if (persisted.getStripeCheckoutUrl() != null && "PENDING".equals(persisted.getPaymentStatus()))
-            return new CheckoutResult(order.id(), persisted.getStripeCheckoutUrl());
         try {
+            RequestOptions stripeOptions = RequestOptions.builder().setApiKey(secretKey).build();
+            if ("PAID".equals(persisted.getPaymentStatus()))
+                return new CheckoutResult(order.id(), null, true, order.totalCents());
+            if (persisted.getStripeSessionId() != null && "PENDING".equals(persisted.getPaymentStatus())) {
+                Session previous = Session.retrieve(persisted.getStripeSessionId(), stripeOptions);
+                if ("paid".equals(previous.getPaymentStatus())) {
+                    orders.markStripePaid(previous.getId());
+                    return new CheckoutResult(order.id(), null, true, order.totalCents());
+                }
+                if ("open".equals(previous.getStatus()))
+                    return new CheckoutResult(order.id(), previous.getUrl(), false, order.totalCents());
+            }
             SessionCreateParams.Builder params = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
                     .setSuccessUrl(frontendOrigin() + "/?payment=success&session_id={CHECKOUT_SESSION_ID}")
@@ -57,10 +67,10 @@ public class StripePaymentService {
                                 .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder().setName("Livrare").build()).build()).build());
             }
             RequestOptions options = RequestOptions.builder().setApiKey(secretKey)
-                    .setIdempotencyKey("fest-iq-order-" + order.id()).build();
+                    .setIdempotencyKey("fest-iq-order-" + order.id() + "-" + java.util.UUID.randomUUID()).build();
             Session session = Session.create(params.build(), options);
             orders.saveStripeSession(order.id(), session.getId(), session.getUrl());
-            return new CheckoutResult(order.id(), session.getUrl());
+            return new CheckoutResult(order.id(), session.getUrl(), false, order.totalCents());
         } catch (StripeException e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Nu am putut inițializa plata cu Stripe. Încearcă din nou.", e);
         }
@@ -98,5 +108,5 @@ public class StripePaymentService {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Plata cu cardul nu este complet configurată. Adaugă STRIPE_WEBHOOK_SECRET în backend.");
     }
     private String frontendOrigin() { return frontendUrl == null ? "http://localhost:5173" : frontendUrl.trim().replaceAll("/+$", ""); }
-    public record CheckoutResult(Long orderId, String checkoutUrl) {}
+    public record CheckoutResult(Long orderId, String checkoutUrl, boolean alreadyPaid, long totalCents) {}
 }

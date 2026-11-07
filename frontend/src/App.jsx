@@ -193,6 +193,12 @@ function App() {
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.message || result.detail || result.error || (response.status === 409 ? 'Some items are no longer available in the requested quantity.' : `The server returned ${response.status}. Check the backend is running and restart it after updating.`))
       if (card) {
+        if (result.alreadyPaid) {
+          setOrderConfirmation({ id: result.orderId, totalCents: result.totalCents, paymentMethod: 'STRIPE' }); setCart([]); setCheckout(false)
+          localStorage.removeItem('atelier-pending-order-key')
+          const nextKey = crypto.randomUUID(); localStorage.setItem('atelier-pending-order-key', nextKey); setOrderKey(nextKey)
+          return
+        }
         if (!result.checkoutUrl) throw new Error('Stripe nu a returnat linkul de plată. Încearcă din nou.')
         window.location.assign(result.checkoutUrl)
         return
